@@ -13,6 +13,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <ftw.h>
+#include <fstream>
 
 #define MAX_PATH 100
 #define BUFFER_SIZE 1024
@@ -23,81 +24,71 @@ char config_path[MAX_PATH] = "conf.txt";
 char abs_config_path[MAX_PATH];
 char abs_folder1[MAX_PATH];
 char abs_folder2[MAX_PATH];
-char img_folder[MAX_PATH];
-char others_folder[MAX_PATH];
+char total_log_path[MAX_PATH];
 int interval_sec = -1;
 
-
 void get_config() {
+	if (access(config_path, F_OK)) {
+		syslog(LOG_ERR, "Can't find config file %s", abs_config_path);
+		exit(1);		
+	}			
+		
 	FILE* conf = fopen(abs_config_path, "r");
 	if (conf == NULL) {
-		syslog(LOG_ERR, "Failed to open config file. Error number is %d", errno);
+		syslog(LOG_ERR, "Failed to open config file. Error %d", errno);
 		exit(1);
 	}
 	if (fscanf(conf, "%s", abs_folder1) < 0 || fscanf(conf, "%s", abs_folder2) < 0 || fscanf(conf, "%d", &interval_sec) < 0) {
-		syslog(LOG_ERR, "Failed to read config file. Error number is %d", errno);
+		syslog(LOG_ERR, "Failed to read config file. Error %d", errno);
 		fclose(conf);
 		exit(1);
 	} 
-	strcpy(img_folder, abs_folder2);
-	strcat(img_folder, "/IMG/");	
-	strcpy(others_folder, abs_folder2);
-	strcat(others_folder, "/OTHERS/");
 	fclose(conf);
+	
+	strcpy(total_log_path, abs_folder2);
+	strcat(total_log_path, "/total.log");	
 }
 
-
-int remove_file(const char* fpath, const struct stat *st, int typeflag, struct FTW *ftwbuf) {
-	int res = remove(fpath);
-	if (res) {
-		syslog(LOG_ERR, "Can't remove %s", fpath);
-		exit(1);		
-	}
-	return res;
+bool file_is_log(char* fpath) {
+	char *dot = strrchr(fpath, '.');
+	return dot && !strcmp(dot, ".log");
 }
 
-
-int remove_dir(const char* path) {
-	return nftw(path, remove_file, 64, FTW_DEPTH | FTW_PHYS);
-}
-
-
-int copy_file(const char* source_path, const struct stat *st, int typeflag, struct FTW *ftwbuf) {
+int copy_and_remove_log(const char* source_path, const struct stat *st, int typeflag, struct FTW *ftwbuf) {
 	if (typeflag) {
 		return 0;	
 	}
+
 	char filename[MAX_PATH];
 	strcpy(filename, basename(strdup(source_path))); 
-	char target_path[MAX_PATH];
+	
+	if (!file_is_log(filename)) {
+		return 0;
+	}
+	
+	std::ifstream source(source_path);
+	if (!source) {
+		syslog(LOG_ERR, "Can't open %s", source_path);
+		return 0;			
+	}
+
+	std::ofstream target(total_log_path, std::fstream::app);
+
+	if (target.tellp() != target.beg) {
+		target << std::endl << std::endl;
+	}
+
+	target << filename << std::endl << std::endl;
+	target << source.rdbuf();
+
+	source.close();
+	target.close();
 		
-	char *dot = strrchr(filename, '.');
-	if (dot && !strcmp(dot, ".png")) {
-		strcpy(target_path, img_folder);				
-	} else {
-		strcpy(target_path, others_folder);					
+	if (remove(source_path)) {
+		syslog(LOG_ERR, "Can't remove %s", source_path);
+		return 0;		
 	}
-	strcat(target_path, filename);
 	
-	FILE* source = fopen(source_path, "r");
-	if (source == NULL) {
-		syslog(LOG_ERR, "Failed to open file %s", source_path);
-	}	
-	
-	FILE* target = fopen(target_path, "w");
-
-	int nread;
-	while (nread = fread(buffer, BUFFER_SIZE, 1, source), nread > 0) {
-		int nwrite = fwrite(buffer, BUFFER_SIZE, nread, target);
-		if (nwrite != nread) {
-			syslog(LOG_ERR, "Error while copying file");
-			fclose(source);
-			fclose(target);
-			exit(1);		
-		}
-	}
-	fclose(source);
-	fclose(target);
-
 	return 0;
 }
 
@@ -112,19 +103,13 @@ void proc() {
 	}
 
 	DIR* dir2 = opendir(abs_folder2);
-	if (dir2) {
+	if (dir2 == NULL) {
+		mkdir(abs_folder2, 0755);
+	} else {
 		closedir(dir2);
-		if (remove_dir(abs_folder2)) {
-			syslog(LOG_ERR, "Can't empty target directory");
-			exit(1);		
-		}
-	} 
+	}
 
-	mkdir(abs_folder2, 0755);
-	mkdir(img_folder, 0755);
-	mkdir(others_folder, 0755);
-
-	nftw(abs_folder1, copy_file, 64, FTW_DEPTH | FTW_PHYS);
+	nftw(abs_folder1, copy_and_remove_log, 64, FTW_DEPTH | FTW_PHYS);
 }
 
 void sig_handler(int signo)
@@ -263,17 +248,13 @@ int main(int argc, char* argv[])
 		kill_daemon(); 
 		
 		realpath(config_path, abs_config_path);
-		if (access(config_path, F_OK)) {
-			syslog(LOG_ERR, "Can't find config file %s", abs_config_path);
-			exit(1);		
-		}			
-
+		
 		get_config();
 		daemonize();
 		handle_signals();
 
 		while(1) {
-			syslog(LOG_INFO, "Copying...");	
+			syslog(LOG_INFO, "Processing...");	
 			proc();
 			syslog(LOG_INFO, "Done");
 
