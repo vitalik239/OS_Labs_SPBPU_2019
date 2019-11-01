@@ -15,12 +15,9 @@
 #include <ftw.h>
 #include <fstream>
 
-#define MAX_PATH 100
-#define BUFFER_SIZE 1024
-#define PID_PATH "/var/run/daemon.pid"
+static const int MAX_PATH = 100;
+static const char* PID_PATH = "/var/run/daemon.pid";
 
-char buffer[BUFFER_SIZE];
-char config_path[MAX_PATH] = "conf.txt";
 char abs_config_path[MAX_PATH];
 char abs_folder1[MAX_PATH];
 char abs_folder2[MAX_PATH];
@@ -28,7 +25,7 @@ char total_log_path[MAX_PATH];
 int interval_sec = -1;
 
 void get_config() {
-	if (access(config_path, F_OK)) {
+	if (access(abs_config_path, F_OK)) {
 		syslog(LOG_ERR, "Can't find config file %s", abs_config_path);
 		exit(1);		
 	}			
@@ -216,9 +213,12 @@ void daemonize()
 	close(STDOUT_FILENO);
 	close(STDERR_FILENO);
 	
+
+	kill_daemon(); 	
+
 	//Rewrite pid file
 	FILE* pid_fp = fopen(PID_PATH, "w");
-	if (pid_fp == NULL) {
+	if (pid_fp == nullptr) {
 		syslog(LOG_ERR, "Failed to open pid file");
 		exit(1);
 	} 
@@ -245,11 +245,10 @@ int main(int argc, char* argv[])
 	if (strcmp(argv[1], "start") == 0) {
 		syslog(LOG_INFO, "Starting...");
 		
-		kill_daemon(); 
-		
+		char* config_path = argv[2];
 		realpath(config_path, abs_config_path);
-		
 		get_config();
+		
 		daemonize();
 		handle_signals();
 
