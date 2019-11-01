@@ -16,7 +16,7 @@
 #include <fstream>
 
 enum {
-	SUCCESS, 
+	SUCCESS,
 	FORK_ERROR,
 	CONFIG_ERROR,
 	PID_ERROR,
@@ -37,9 +37,9 @@ int interval_sec = -1;
 void get_config() {
 	if (access(abs_config_path, F_OK)) {
 		syslog(LOG_ERR, "Can't find config file %s", abs_config_path);
-		exit(CONFIG_ERROR);		
-	}			
-		
+		exit(CONFIG_ERROR);
+	}
+
 	FILE* conf = fopen(abs_config_path, "r");
 	if (conf == nullptr) {
 		syslog(LOG_ERR, "Failed to open config file. Error %d", errno);
@@ -49,16 +49,16 @@ void get_config() {
 		syslog(LOG_ERR, "Failed to read config file. Error %d", errno);
 		fclose(conf);
 		exit(CONFIG_ERROR);
-	} 
+	}
 	fclose(conf);
-	
+
 	if (!strcmp(abs_folder1, abs_folder2)) {
 		syslog(LOG_ERR, "Directories' paths are equal");
 		exit(CONFIG_ERROR);
 	}
 
 	strcpy(total_log_path, abs_folder2);
-	strcat(total_log_path, TOTAL_LOG);	
+	strcat(total_log_path, TOTAL_LOG);
 }
 
 bool file_is_log(char* fpath) {
@@ -68,20 +68,20 @@ bool file_is_log(char* fpath) {
 
 int copy_and_remove_log(const char* source_path, const struct stat *st, int typeflag, struct FTW *ftwbuf) {
 	if (typeflag) {
-		return 0;	
+		return 0;
 	}
 
 	char filename[MAX_PATH];
-	strcpy(filename, basename(strdup(source_path))); 
-	
+	strcpy(filename, basename(strdup(source_path)));
+
 	if (!file_is_log(filename)) {
 		return 0;
 	}
-	
+
 	std::ifstream source(source_path);
 	if (!source) {
 		syslog(LOG_ERR, "Can't open %s", source_path);
-		return 0;			
+		return 0;
 	}
 
 	std::ofstream target(total_log_path, std::fstream::app);
@@ -95,23 +95,23 @@ int copy_and_remove_log(const char* source_path, const struct stat *st, int type
 
 	source.close();
 	target.close();
-		
+
 	if (remove(source_path)) {
 		syslog(LOG_ERR, "Can't remove %s", source_path);
-		return 0;		
+		return 0;
 	}
-	
+
 	return 0;
 }
 
-void proc() {	
+void proc() {
 	DIR* dir1 = opendir(abs_folder1);
 
 	if (dir1 == nullptr) {
 		syslog(LOG_ERR, "Can't open source directory %s", abs_folder1);
-		exit(ACCESS_ERROR);		
+		exit(ACCESS_ERROR);
 	} else {
-		closedir(dir1);		
+		closedir(dir1);
 	}
 
 	DIR* dir2 = opendir(abs_folder2);
@@ -137,21 +137,21 @@ void sig_handler(int signo)
 		exit(SUCCESS);
 	}
 
-	if (signo == SIGHUP) {	
+	if (signo == SIGHUP) {
 		syslog(LOG_INFO, "SIGHUP has been caught! Reading config file...");
 		get_config();
-	} 
+	}
 }
 
 void handle_signals()
 {
-	if(signal(SIGTERM, sig_handler) == SIG_ERR)	{
+	if (signal(SIGTERM, sig_handler) == SIG_ERR)	{
 		syslog(LOG_ERR, "Error! Can't catch SIGTERM");
 		exit(SIG_ERROR);
 	}
-	if(signal(SIGHUP, sig_handler) == SIG_ERR) {
+	if (signal(SIGHUP, sig_handler) == SIG_ERR) {
 		syslog(LOG_ERR, "Error! Can't catch SIGHUP");
-		exit(SIG_ERROR);	
+		exit(SIG_ERROR);
 	}
 }
 
@@ -162,23 +162,23 @@ int kill_daemon() {
 
 	FILE* pid_file = fopen(PID_PATH, "r");
 	if (pid_file == nullptr) {
-		return PID_ERROR;			
-	}		
+		return PID_ERROR;
+	}
 
 	pid_t pid;
 	fscanf(pid_file, "%d", &pid);
 	fclose(pid_file);
-	
+
 	char proc_path[15];
 	sprintf(proc_path, "/proc/%d", pid);
-	
+
 	struct stat st;
 	if (stat(proc_path, &st) || !S_ISDIR(st.st_mode)) {
 		return PID_ERROR;
 	}
 
-	kill(pid, SIGTERM);		
-	return SUCCESS;  
+	kill(pid, SIGTERM);
+	return SUCCESS;
 }
 
 void daemonize()
@@ -196,15 +196,15 @@ void daemonize()
 	if (sid < 0) {
 		exit(FORK_ERROR);
 	}
-	
+
 	//Second fork
 	pid = fork();
 	if (pid < 0) {
 		exit(FORK_ERROR);
-	} else if(pid > 0) {
+	} else if (pid > 0) {
 		exit(SUCCESS);
 	}
-	
+
 	pid = getpid();
 
 	//Change working directory to root directory
@@ -217,16 +217,16 @@ void daemonize()
 	close(STDIN_FILENO);
 	close(STDOUT_FILENO);
 	close(STDERR_FILENO);
-	
-	kill_daemon(); 	
+
+	kill_daemon();
 
 	//Rewrite pid file
 	FILE* pid_fp = fopen(PID_PATH, "w");
 	if (pid_fp == nullptr) {
 		syslog(LOG_ERR, "Failed to open pid file");
 		exit(PID_ERROR);
-	} 
-	fprintf(pid_fp, "%d", pid);	
+	}
+	fprintf(pid_fp, "%d", pid);
 	fclose(pid_fp);
 }
 
@@ -235,9 +235,9 @@ int main(int argc, char* argv[])
 
 	if (argc < 2) {
 		printf("Too few arguments");
-		return 0;	
+		return 0;
 	}
-	
+
 	openlog("daemon_log", LOG_NOWAIT | LOG_PID, LOG_USER);
 
 	if (strcmp(argv[1], "stop") == 0) {
@@ -252,10 +252,10 @@ int main(int argc, char* argv[])
 		char* config_path = argv[2];
 		realpath(config_path, abs_config_path);
 		get_config();
-		
+
 		daemonize();
 		syslog(LOG_INFO, "Daemon started");
-		
+
 		handle_signals();
 
 		while (true) {
