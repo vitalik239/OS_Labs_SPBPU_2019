@@ -57,6 +57,11 @@ void get_config() {
 		exit(CONFIG_ERROR);
 	}
 
+	if (interval_sec <= 0) {
+		syslog(LOG_ERR, "Incorrect interval %d", interval_sec);
+		exit(CONFIG_ERROR);
+	}
+
 	strcpy(total_log_path, abs_folder2);
 	strcat(total_log_path, TOTAL_LOG);
 }
@@ -128,7 +133,7 @@ void sig_handler(int signo)
 {
 	if (signo == SIGTERM)
 	{
-		syslog(LOG_INFO, "SIGTERM has been caught! Exiting...");
+		syslog(LOG_INFO, "SIGTERM. Stopping daemon...");
 		FILE* pid_file = fopen(PID_PATH, "w");
 		if (pid_file != nullptr)
 		{
@@ -138,7 +143,7 @@ void sig_handler(int signo)
 	}
 
 	if (signo == SIGHUP) {
-		syslog(LOG_INFO, "SIGHUP has been caught! Reading config file...");
+		syslog(LOG_INFO, "SIGHUP. Updating config file...");
 		get_config();
 	}
 }
@@ -177,7 +182,11 @@ int kill_daemon() {
 		return PID_ERROR;
 	}
 
-	kill(pid, SIGTERM);
+	if (kill(pid, SIGTERM)) {
+		syslog(LOG_ERR, "Unable to kill daemon %d", pid);
+		return PID_ERROR;
+	}
+
 	return SUCCESS;
 }
 
@@ -242,7 +251,6 @@ int main(int argc, char* argv[])
 
 	if (strcmp(argv[1], "stop") == 0) {
 		kill_daemon();
-		syslog(LOG_INFO, "Daemon stopped");
 	} else if (strcmp(argv[1], "start") == 0) {
 		if (argc < 3) {
 			printf("Config path is missing\n");
