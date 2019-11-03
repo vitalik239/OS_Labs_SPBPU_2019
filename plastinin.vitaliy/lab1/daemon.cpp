@@ -36,7 +36,9 @@ void get_config() {
 		syslog(LOG_ERR, "Failed to open config file. Error %d", errno);
 		exit(EXIT_FAILURE);
 	}
-	if (fscanf(conf, "%s", abs_folder1) < 0 || fscanf(conf, "%s", abs_folder2) < 0 || fscanf(conf, "%d", &interval_sec) < 0) {
+	if (fscanf(conf, "%s", abs_folder1) < 0 ||
+			fscanf(conf, "%s", abs_folder2) < 0 ||
+			fscanf(conf, "%d", &interval_sec) < 0) {
 		syslog(LOG_ERR, "Failed to read config file. Error %d", errno);
 		fclose(conf);
 		exit(EXIT_FAILURE);
@@ -58,11 +60,12 @@ void get_config() {
 }
 
 bool file_is_log(char* fpath) {
-	char *dot = strrchr(fpath, '.');
+	char* dot = strrchr(fpath, '.');
 	return dot && !strcmp(dot, ".log");
 }
 
-int copy_and_remove_log(const char* source_path, const struct stat *st, int typeflag, struct FTW *ftwbuf) {
+int copy_and_remove_log(const char* source_path, const struct stat* st,
+												int typeflag, struct FTW* ftwbuf) {
 	if (typeflag) {
 		return 0;
 	}
@@ -120,14 +123,11 @@ void proc() {
 	nftw(abs_folder1, copy_and_remove_log, 64, FTW_DEPTH | FTW_PHYS);
 }
 
-void sig_handler(int signo)
-{
-	if (signo == SIGTERM)
-	{
+void sig_handler(int signo) {
+	if (signo == SIGTERM) {
 		syslog(LOG_INFO, "SIGTERM. Stopping daemon...");
 		FILE* pid_file = fopen(PID_PATH, "w");
-		if (pid_file != nullptr)
-		{
+		if (pid_file != nullptr) {
 			fclose(pid_file);
 		}
 		exit(EXIT_SUCCESS);
@@ -139,9 +139,8 @@ void sig_handler(int signo)
 	}
 }
 
-void handle_signals()
-{
-	if (signal(SIGTERM, sig_handler) == SIG_ERR)	{
+void handle_signals() {
+	if (signal(SIGTERM, sig_handler) == SIG_ERR) {
 		syslog(LOG_ERR, "Error! Can't catch SIGTERM");
 		exit(EXIT_FAILURE);
 	}
@@ -181,9 +180,8 @@ int kill_daemon() {
 	return EXIT_SUCCESS;
 }
 
-void daemonize()
-{
-	//First fork
+void daemonize() {
+	// First fork
 	pid_t pid = fork();
 	if (pid < 0) {
 		exit(EXIT_FAILURE);
@@ -191,13 +189,13 @@ void daemonize()
 		exit(EXIT_SUCCESS);
 	}
 
-	//Create a new session
+	// Create a new session
 	pid_t sid = setsid();
 	if (sid < 0) {
 		exit(EXIT_FAILURE);
 	}
 
-	//Second fork
+	// Second fork
 	pid = fork();
 	if (pid < 0) {
 		exit(EXIT_FAILURE);
@@ -207,20 +205,20 @@ void daemonize()
 
 	pid = getpid();
 
-	//Change working directory to root directory
+	// Change working directory to root directory
 	chdir("/");
 
-	//Grant all permisions for all files and directories created by the daemon
+	// Grant all permisions for all files and directories created by the daemon
 	umask(0);
 
-	//Redirect std IO
+	// Redirect std IO
 	close(STDIN_FILENO);
 	close(STDOUT_FILENO);
 	close(STDERR_FILENO);
 
 	kill_daemon();
 
-	//Rewrite pid file
+	// Rewrite pid file
 	FILE* pid_fp = fopen(PID_PATH, "w");
 	if (pid_fp == nullptr) {
 		syslog(LOG_ERR, "Failed to open pid file");
@@ -230,9 +228,7 @@ void daemonize()
 	fclose(pid_fp);
 }
 
-int main(int argc, char* argv[])
-{
-
+int main(int argc, char* argv[]) {
 	if (argc < 2) {
 		printf("Too few arguments");
 		return 0;
