@@ -1,4 +1,4 @@
-g++ daemon.cpp -Wall -Werror -o daemon
+g++ daemon.cpp -std=c++11 -Wall -Werror -o daemon
 rm -f daemon.o
 
 pid_file="/var/run/daemon.pid"
