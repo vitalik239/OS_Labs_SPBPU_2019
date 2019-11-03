@@ -15,15 +15,6 @@
 #include <ftw.h>
 #include <fstream>
 
-enum {
-	SUCCESS,
-	FORK_ERROR,
-	CONFIG_ERROR,
-	PID_ERROR,
-	SIG_ERROR,
-	ACCESS_ERROR
-};
-
 static const int MAX_PATH = 100;
 static const char* PID_PATH = "/var/run/daemon.pid";
 static const char* TOTAL_LOG = "/total.log";
@@ -37,29 +28,29 @@ int interval_sec = -1;
 void get_config() {
 	if (access(abs_config_path, F_OK)) {
 		syslog(LOG_ERR, "Can't find config file %s", abs_config_path);
-		exit(CONFIG_ERROR);
+		exit(EXIT_FAILURE);
 	}
 
 	FILE* conf = fopen(abs_config_path, "r");
 	if (conf == nullptr) {
 		syslog(LOG_ERR, "Failed to open config file. Error %d", errno);
-		exit(CONFIG_ERROR);
+		exit(EXIT_FAILURE);
 	}
 	if (fscanf(conf, "%s", abs_folder1) < 0 || fscanf(conf, "%s", abs_folder2) < 0 || fscanf(conf, "%d", &interval_sec) < 0) {
 		syslog(LOG_ERR, "Failed to read config file. Error %d", errno);
 		fclose(conf);
-		exit(CONFIG_ERROR);
+		exit(EXIT_FAILURE);
 	}
 	fclose(conf);
 
 	if (!strcmp(abs_folder1, abs_folder2)) {
 		syslog(LOG_ERR, "Directories' paths are equal");
-		exit(CONFIG_ERROR);
+		exit(EXIT_FAILURE);
 	}
 
 	if (interval_sec <= 0) {
 		syslog(LOG_ERR, "Incorrect interval %d", interval_sec);
-		exit(CONFIG_ERROR);
+		exit(EXIT_FAILURE);
 	}
 
 	strcpy(total_log_path, abs_folder2);
@@ -114,7 +105,7 @@ void proc() {
 
 	if (dir1 == nullptr) {
 		syslog(LOG_ERR, "Can't open source directory %s", abs_folder1);
-		exit(ACCESS_ERROR);
+		exit(EXIT_FAILURE);
 	} else {
 		closedir(dir1);
 	}
@@ -139,7 +130,7 @@ void sig_handler(int signo)
 		{
 			fclose(pid_file);
 		}
-		exit(SUCCESS);
+		exit(EXIT_SUCCESS);
 	}
 
 	if (signo == SIGHUP) {
@@ -152,22 +143,22 @@ void handle_signals()
 {
 	if (signal(SIGTERM, sig_handler) == SIG_ERR)	{
 		syslog(LOG_ERR, "Error! Can't catch SIGTERM");
-		exit(SIG_ERROR);
+		exit(EXIT_FAILURE);
 	}
 	if (signal(SIGHUP, sig_handler) == SIG_ERR) {
 		syslog(LOG_ERR, "Error! Can't catch SIGHUP");
-		exit(SIG_ERROR);
+		exit(EXIT_FAILURE);
 	}
 }
 
 int kill_daemon() {
 	if (access(PID_PATH, F_OK)) {
-		return PID_ERROR;
+		return EXIT_FAILURE;
 	}
 
 	FILE* pid_file = fopen(PID_PATH, "r");
 	if (pid_file == nullptr) {
-		return PID_ERROR;
+		return EXIT_FAILURE;
 	}
 
 	pid_t pid;
@@ -179,15 +170,15 @@ int kill_daemon() {
 
 	struct stat st;
 	if (stat(proc_path, &st) || !S_ISDIR(st.st_mode)) {
-		return PID_ERROR;
+		return EXIT_FAILURE;
 	}
 
 	if (kill(pid, SIGTERM)) {
 		syslog(LOG_ERR, "Unable to kill daemon %d", pid);
-		return PID_ERROR;
+		return EXIT_FAILURE;
 	}
 
-	return SUCCESS;
+	return EXIT_SUCCESS;
 }
 
 void daemonize()
@@ -195,23 +186,23 @@ void daemonize()
 	//First fork
 	pid_t pid = fork();
 	if (pid < 0) {
-		exit(FORK_ERROR);
+		exit(EXIT_FAILURE);
 	} else if (pid > 0) {
-		exit(SUCCESS);
+		exit(EXIT_SUCCESS);
 	}
 
 	//Create a new session
 	pid_t sid = setsid();
 	if (sid < 0) {
-		exit(FORK_ERROR);
+		exit(EXIT_FAILURE);
 	}
 
 	//Second fork
 	pid = fork();
 	if (pid < 0) {
-		exit(FORK_ERROR);
+		exit(EXIT_FAILURE);
 	} else if (pid > 0) {
-		exit(SUCCESS);
+		exit(EXIT_SUCCESS);
 	}
 
 	pid = getpid();
@@ -233,7 +224,7 @@ void daemonize()
 	FILE* pid_fp = fopen(PID_PATH, "w");
 	if (pid_fp == nullptr) {
 		syslog(LOG_ERR, "Failed to open pid file");
-		exit(PID_ERROR);
+		exit(EXIT_FAILURE);
 	}
 	fprintf(pid_fp, "%d", pid);
 	fclose(pid_fp);
